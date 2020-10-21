@@ -32,5 +32,9 @@ router.get('/course', controUser.apiGetCourse)
 router.get('/sta', controUser.apiGetSTA)
 // 添加课表
 router.post('/addcourse', controUser.apiAddCourse)
+// 添加课表
+router.post('/editcourse', controUser.apiEditCourse)
+// 删除课程
+router.get('/deletecourse', controUser.apiDeleteCourse)
 
 module.exports = router;

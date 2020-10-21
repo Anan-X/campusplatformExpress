@@ -359,7 +359,7 @@ const moveCourse = (req, res) => {
 const apiGetCourse = (req, res) => {
   let {teacher_id, weekth, day} = req.query
   let sql = `
-  SELECT  course_id, subjectname, weekth, day, time,course.time_id, course.classroom_id,classroomname, addressname, teacher.name FROM  course 
+  SELECT  course_id, subjectname, subject.subject_id,teacher.teacher_id,classaddress.classaddress_id, weekth, day, time,course.time_id, course.classroom_id,classroomname, addressname, teacher.name FROM  course 
   LEFT JOIN subject on course.subject_id = subject.subject_id
   left join teacher on course.teacher_id = teacher.teacher_id
   left join courseTime on course.time_id = courseTime.time_id
@@ -423,6 +423,48 @@ const apiAddCourse = (req, res) => {
     }
   })
 }
+// 修改课表
+const apiEditCourse =(req, res) => {
+  let {course_id,subject_id,teacher_id,classaddress_id,time_id} = req.body
+  console.log(req.body)
+  console.log(course_id,subject_id,teacher_id,classaddress_id,time_id)
+  let sql ="UPDATE `course` SET `subject_id` = ?, `time_id` = ?, `teacher_id` = ?, `classaddress_id` = ? WHERE `course_id` = ?"
+  let sqlArr = [subject_id,time_id,teacher_id,classaddress_id,course_id]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows===1){
+      res.send({
+        code: 200,
+        msg: '修改成功'
+      })
+    }else{
+      res.send({
+        code: 400,
+        msg: '修改失败'
+      })
+    }
+  })
+}
+// 删除课程
+const apiDeleteCourse =(req, res) => {
+  let course_id = req.query.course_id
+  let sql =`DELETE FROM course where course_id=?`
+  let sqlArr = [course_id]
+  dbConfig.SySqlConnect(sql,sqlArr)
+  .then(data => {
+    if(data.affectedRows===1){
+      res.send({
+        code: 200,
+        msg: '删除成功'
+      })
+    }else{
+      res.send({
+        code: 400,
+        msg: '删除失败'
+      })
+    }
+  })
+}
 
 module.exports = {
   passLogin,
@@ -439,5 +481,7 @@ module.exports = {
   moveCourse,
   apiGetCourse,
   apiGetSTA,
-  apiAddCourse
+  apiAddCourse,
+  apiEditCourse,
+  apiDeleteCourse
 }
