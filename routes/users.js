@@ -23,6 +23,8 @@ router.post('/resiger', controUser.resiger)
 router.get('/apiGetUserInfo', controUser.apiGetUserInfo)
 // 获取用户学生表基本信息
 router.get('/apiGetStudentInfo', controUser.apiGetStudentInfo)
+// 获取学期
+router.get('/semester', controUser.apiGetSemester)
 // 获取学生成绩
 router.get('/getScore', controUser.apiGetScore)
 // 获取学生课表

@@ -94,13 +94,12 @@ const passLogin = (req, res) => {
   console.log(req.body)
   let studentID = req.body.studentID
   let password = req.body.password
-  let sql = `select * from users where user_id =? and password =?`
+  let sql = `select * from users where user_id =? and password =? and (role = 'teacher' or role = 'admin')`
   let sqlArr = [studentID, password]
   let callBack = async(err, data) => {
     if(err){
       console.log('连接出错')
       }else{
-        console.log(data.length)
         if(data.length){
           // 要把数据转换成JSON格式发到页面
           let reslutStr = JSON.stringify(data); 
@@ -138,30 +137,40 @@ const passLogin = (req, res) => {
 const phoneLogin = (req, res) => {
   let {phone,code} = req.body
   if(phoneCodeif(phone,code)){
-    let sql = `select * from users where phone=?`
+    let sql = `select * from users where phone=? and (role = 'teacher' or role = 'admin')`
     let sqlArr =[phone]
-    let callBack = (err, data) => {
+    let callBack =async (err, data) => {
       if(err){
         console.log('连接出错')
         }else{
-          // 要把数据转换成JSON格式发到页面
-          let reslutStr = JSON.stringify(data); 
-          let reslutObj = JSON.parse(reslutStr);
-          let student_id = reslutObj[0].user_id
-          // 签发token
-          jwk.sendToken(student_id).then(token => {
-            res.send({
-              code: 200,
-              msg: '登录成功',
-              token,
-              info : reslutObj[0]
+          if(data.length){
+            // 要把数据转换成JSON格式发到页面
+            let reslutStr = JSON.stringify(data); 
+            let reslutObj = JSON.parse(reslutStr);
+            // 查询自己的信息
+            let myinfo = await getInfo(studentID)
+            // console.log(myinfo)
+            // 签发token
+            jwk.sendToken(studentID).then(token => {
+              res.send({
+                code: 200,
+                msg: '登录成功',
+                token,
+                info : reslutObj[0],
+                myInfo: myinfo[0]
+              })
+            }).catch(err => {
+              res.send({
+                code: 400,
+                msg: err.message
+              })
             })
-          }).catch(err => {
+          } else {
             res.send({
               code: 400,
-              msg: err.message
+              msg: "密码错误"
             })
-          })
+          }
         }
      }
      dbConfig.sqlConnect(sql, sqlArr, callBack)
@@ -234,7 +243,7 @@ const StudentInfoEdit = (req, res) => {
 }
 // 获取学期
 const getSemester = (req, res) => {
-  let sql =  `select semester_id as value, semestername as label from semester`
+  let sql =  `select semestername as label,semester_id as value from semester`
   dbconfig.SySqlConnect(sql)
   .then(data => {
     res.send({
@@ -311,45 +320,89 @@ const scoreStudentEdit = (req, res) =>{
     })
   }
 }
+// 查询班级有哪些课
+const apiUsedSubject = (req, res)  => {
+  let {teacher_id, semester_id} = req.query
+  console.log()
+  let sql = `
+    SELECT distinct subjectname,score.subject_id from subject 
+    left join score on score.subject_id = subject.subject_id
+    left join students on students.student_id = score.student_id
+    WHERE students.classroom_id = (select classroom_id from teacher where teacher_id = ?) and score.semester_id =?
+    `
+  let sqlArr =  [teacher_id,semester_id]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    res.send({
+      code: 200,
+      data
+    }
+    )
+  })
+}
 // 添加课程接口
-const addCourse = (req, res) => {
-  let {course, semester} = req.query
-  console.log(course)
-  console.log(semester)
-  let sql = "alter table `score-"+ semester +"` add "+course+" varchar(30)"
-  console.log(sql)
-  dbConfig.SySqlConnect(sql)
-  .then(result => {
-    if(result){
+const addScore = (req, res) => {
+  let {subject_id, teacher_id, semester_id} = req.query
+  console.log(subject_id, teacher_id, semester_id)
+  let sql = `select student_id from students where classroom_id = (select classroom_id from teacher where teacher_id = ?)`
+  dbConfig.SySqlConnect(sql, teacher_id)
+  .then(data => {
+    let flag =  true
+    // console.log(data)
+    data.forEach(item=> {
+      console.log(item.student_id)
+      let sql  = `insert into score(student_id, subject_id, semester_id) values(?,?,?)`
+      let sqlArr = [item.student_id, subject_id, semester_id]
+      dbConfig.SySqlConnect(sql,sqlArr)
+      .then(data => {
+        if(data.affectedRows!=1){
+          flag = false
+        }
+      })
+    })
+    if(flag) {
       res.send({
         code: 200,
-        msg: '添加成功'
+        msg: "添加成功"
       })
-    }else{
+    }else {
       res.send({
-        code: 400,
-        msg: '添加失败'
+        code: 200,
+        msg: "添加失败"
       })
     }
   })
 }
 // 删除课程接口
-const moveCourse = (req, res) => {
-  let {course, semester} =req.query
+const moveScore = (req, res) => {
+  let {subject_id, semester_id, teacher_id} =req.query
+  console.log(subject_id, semester_id, teacher_id)
   // console.log(course,semester)
-  let sql = "alter table" + "`" + semester + "` " + "drop column " + "`" + course + "` "
-  dbConfig.SySqlConnect(sql)
-  .then(result => {
-    if (result) {
-      
+  let sql = `select student_id from students where classroom_id = (select classroom_id from teacher where teacher_id = ?)`
+  dbConfig.SySqlConnect(sql, teacher_id)
+  .then(data => {
+    let flag =  true
+    // console.log(data)
+    data.forEach(item=> {
+      console.log(item.student_id)
+      let sql = "DELETE FROM `bishe`.`score` WHERE subject_id=? and semester_id=? and student_id = ?"
+      let sqlArr = [subject_id, semester_id, item.student_id]
+      dbConfig.SySqlConnect(sql,sqlArr)
+      .then(data => {
+        if(data.affectedRows!=1){
+          flag = false
+        }
+      })
+    })
+    if(flag) {
       res.send({
         code: 200,
-        msg: '课程《' + course + '》删除成功'
+        msg: "删除成功"
       })
     }else {
       res.send({
-        code: 400,
-        msg: '课程《' + course + '》删除失败'
+        code: 200,
+        msg: "删除失败"
       })
     }
   })
@@ -377,7 +430,7 @@ const apiGetCourse = (req, res) => {
     })
   })
 }
-// 获取科目 任课老师 上课地点
+// 获取科目 任课老师 上课地点 班级 学院
 const apiGetSTA =async (req, res) => {
   // 获取科目
   let sqls = `select subject_id, subjectname from subject`
@@ -385,14 +438,24 @@ const apiGetSTA =async (req, res) => {
   let sqlt = `select teacher_id, name from teacher`
   // 获取上课地点
   let sqla = `select classaddress_id, addressname from classaddress`
+  // 获取 班级
+  let sqlc = `select classroom_id, classroomname from classroom`
+  // 获取 学院
+  let sqlschool = `select school_id, schoolname from schools`
    dbconfig.SySqlConnect(sqls).then(datas=>{
      dbconfig.SySqlConnect(sqlt).then(datat=> {
       dbconfig.SySqlConnect(sqla).then(dataa=> {
-        res.send({
-          code: 200,
-          subjects:datas,
-          teachers: datat,
-          address:dataa
+        dbConfig.SySqlConnect(sqlc).then(datac=> {
+          dbconfig.SySqlConnect(sqlschool).then(dataschool => {
+            res.send({
+              code: 200,
+              subjects:datas,
+              teachers: datat,
+              address:dataa,
+              classrooms: datac,
+              schools: dataschool
+            })
+          })
         })
       })
     })
@@ -466,6 +529,416 @@ const apiDeleteCourse =(req, res) => {
   })
 }
 
+//       管理员操作
+// 获取老师信息
+const apiGetTeacher = (req, res)  => {
+  let sql = `
+    SELECT teacher_id, name, sex, age, teacher.classroom_id,classroomname, phone, address from teacher
+    left join classroom on teacher.classroom_id = classroom.classroom_id
+  `
+  dbConfig.SySqlConnect(sql)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        teachers: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+// 教师信息修改
+const apiEditTeacher = (req, res) => {
+  console.log(req.body)
+  let {teacher_id, name, sex, age, classroom_id, phone, address} = req.body.teacher
+  let sql = "UPDATE `teacher` SET `name` = ?,`sex` = ?,`age` = ?,`classroom_id` = ?,`phone` = ?,`address` = ? WHERE `teacher_id` = ?"
+  let sqlArr = [ name, sex, age, classroom_id, phone, address, teacher_id]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows === 1) {
+      res.send({
+        code:200,
+        msg: "修改成功"
+      })
+    }
+  })
+}
+// 添加老师
+const apiAddTeacher =(req, res) => {
+  console.log(req.body.teacher)
+  let {name, age, sex, classroom_id, address, phone} = req.body.teacher
+  sql =  "INSERT INTO `teacher`(`name`, `sex`, `age`, `classroom_id`, `phone`, `address`) VALUES ( ?, ?, ?, ?, ?, ?)"
+  sqlArr = [name, sex, age, classroom_id, phone, address]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows ===1) {
+      res.send({
+        code: 200,
+        msg: "添加成功"
+      })
+    }else {
+      res.send({
+        code: 400,
+        msg: "添加失败"
+      })
+    }
+  })
+}
+// 删除老师
+const apiDeleteTeacher =(req, res) => {
+  console.log(req.body)
+  let teacher_id = req.body.teacher_id
+  let sql =`DELETE FROM teacher where teacher_id=?`
+  dbConfig.SySqlConnect(sql,teacher_id)
+  .then(data => {
+    if(data.affectedRows===1){
+      res.send({
+        code: 200,
+        msg: '删除成功'
+      })
+    }else{
+      res.send({
+        code: 400,
+        msg: '删除失败'
+      })
+    }
+  })
+}
+// 查询老师 根据老师工号查找
+const apiTeacherIdFind = (req, res) => {
+  let teacher_id = req.query.teacher_id
+  let sql = `
+    SELECT teacher_id, name, sex, age, teacher.classroom_id,classroomname, phone, address from teacher
+    left join classroom on teacher.classroom_id = classroom.classroom_id where teacher.teacher_id =?
+  `
+  dbConfig.SySqlConnect(sql, teacher_id)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        teachers: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+// 查询老师 根据老师姓名查找
+const apiTeacherNameFind = (req, res) => {
+  let name = req.query.name
+  let sql = `
+    SELECT teacher_id, name, sex, age, teacher.classroom_id,classroomname, phone, address from teacher
+    left join classroom on teacher.classroom_id = classroom.classroom_id where teacher.name =?
+  `
+  dbConfig.SySqlConnect(sql, name)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        teachers: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+
+// 查询学生信息  全部
+const apiGetStudent = (req, res) => {
+  let sql = `
+  select  schools.school_id, schoolname,student_id, name,classroomname,students.classroom_id, gradename, sex,age, address, phone from students 
+  LEFT JOIN classroom on students.classroom_id = classroom.classroom_id
+  LEFT JOIN grade on students.grade_id = grade.grade_id
+  LEFT JOIN schools on schools.school_id = classroom.school_id
+  `
+  dbConfig.SySqlConnect(sql)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        students: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+// 学生信息修改
+const apiEditStudent = (req, res) => {
+  console.log(req.body)
+  let {student_id, name, sex, age, classroom_id, phone, address} = req.body.student
+  let sql = "UPDATE `students` SET `name` = ?,`sex` = ?,`age` = ?,`classroom_id` = ?,`phone` = ?,`address` = ? WHERE `student_id` = ?"
+  let sqlArr = [ name, sex, age, classroom_id, phone, address, student_id]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows === 1) {
+      res.send({
+        code:200,
+        msg: "修改成功"
+      })
+    }else{
+      res.send({
+        code:400,
+        msg: "修改失败"
+      })
+    }
+  })
+}
+// 添加学生
+const apiAddStudent =(req, res) => {
+  console.log(req.body.student)
+  let {name, age, sex, classroom_id, address, phone} = req.body.student
+  sql =  "INSERT INTO `students`(`name`, `sex`, `age`, `classroom_id`, `phone`, `address`) VALUES ( ?, ?, ?, ?, ?, ?)"
+  sqlArr = [name, sex, age, classroom_id, phone, address]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows ===1) {
+      res.send({
+        code: 200,
+        msg: "添加成功"
+      })
+    }else {
+      res.send({
+        code: 400,
+        msg: "添加失败"
+      })
+    }
+  })
+}
+// 删除学生
+const apiDeleteStudent = (req, res) => {
+  let student_id = req.query.student_id
+  console.log(req.query)
+  let sql =`DELETE FROM students where student_id=?`
+  dbConfig.SySqlConnect(sql,student_id)
+  .then(data => {
+    if(data.affectedRows===1){
+      res.send({
+        code: 200,
+        msg: '删除成功'
+      })
+    }else{
+      res.send({
+        code: 400,
+        msg: '删除失败'
+      })
+    }
+  })
+}
+// 查询学生信息  根据学生学号查找
+const apiStudentIdFind = (req, res) => {
+  let student_id = req.query.student_id
+  let sql = `
+  select  schools.school_id, schoolname,student_id, name,classroomname,students.classroom_id, gradename, sex,age, address, phone from students 
+  LEFT JOIN classroom on students.classroom_id = classroom.classroom_id
+  LEFT JOIN grade on students.grade_id = grade.grade_id
+  LEFT JOIN schools on schools.school_id = classroom.school_id
+  where students.student_id =?
+  `
+  dbConfig.SySqlConnect(sql, student_id)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        students: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+// 查询学生信息  根据学生姓名查找
+const apiStudentNameFind = (req, res) => {
+  let name = req.query.name
+  let sql = `
+  select  schools.school_id, schoolname,student_id, name,classroomname,students.classroom_id, gradename, sex,age, address, phone from students 
+  LEFT JOIN classroom on students.classroom_id = classroom.classroom_id
+  LEFT JOIN grade on students.grade_id = grade.grade_id
+  LEFT JOIN schools on schools.school_id = classroom.school_id
+  where students.name =?
+  `
+  dbConfig.SySqlConnect(sql, name)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        students: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+// 查询学生信息  根据学生姓名查找
+const apiStudentClassFind = (req, res) => {
+  let classroom_id = req.query.classroom_id
+  let sql = `
+  select  schools.school_id, schoolname,student_id, name,classroomname,students.classroom_id, gradename, sex,age, address, phone from students 
+  LEFT JOIN classroom on students.classroom_id = classroom.classroom_id
+  LEFT JOIN grade on students.grade_id = grade.grade_id
+  LEFT JOIN schools on schools.school_id = classroom.school_id
+  where students.classroom_id =?
+  `
+  dbConfig.SySqlConnect(sql, classroom_id)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        students: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+
+// 获取全部用户
+const apiGetUser = (req, res) => {
+  let sql = `SELECT user_id, password, phone,admin, role, email, brithday,address,name from users`
+  dbConfig.SySqlConnect(sql)
+  .then(data => {
+    if(data.length){
+      res.send({
+        code: 200,
+        users: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "查询失败"
+      })
+    }
+  })
+}
+// 获取某个用户  根据 id
+const apiGetUserIdFind = (req, res) => {
+  let user_id = req.query.user_id
+  let sql = `SELECT user_id, password,admin, phone, role, email, brithday,address,name from users where user_id =?`
+  dbConfig.SySqlConnect(sql, user_id)
+  .then(data => {
+    console.log(data)
+    if(data.length){
+      res.send({
+        code: 200,
+        user: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "没有此用户"
+      })
+    }
+  })
+}
+// 获取某个用户  根据 name
+const apiGetUserNameFind = (req, res) => {
+  let name = req.query.name
+  let sql = `SELECT user_id, password,admin, phone, role, email, brithday,address,name from users where name =?`
+  dbConfig.SySqlConnect(sql, name)
+  .then(data => {
+    console.log(data)
+    if(data.length){
+      res.send({
+        code: 200,
+        user: data
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: "没有此用户"
+      })
+    }
+  })
+}
+// 用户信息修改
+const apiEditUser = (req, res) => {
+  console.log(req.body)
+  let {user_id, password, phone, role, email, brithday,address,name} = req.body.user
+  let sql = "UPDATE `users` SET password =?, phone=?, role=?, email=?, brithday=?,address=?,name=? WHERE `user_id` = ?"
+  let sqlArr = [  password, phone, role, email, brithday,address,name, user_id]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows === 1) {
+      res.send({
+        code:200,
+        msg: "修改成功"
+      })
+    }else{
+      res.send({
+        code:400,
+        msg: "修改失败"
+      })
+    }
+  })
+}
+
+// 用户状态修改
+const apiAdminUser = (req, res) => {
+  console.log(req.body)
+  let {user_id, admin} = req.body.user
+  let sql = "UPDATE `users` SET admin = '?' WHERE `user_id` = ?"
+  let sqlArr = [  admin, user_id]
+  dbConfig.SySqlConnect(sql, sqlArr)
+  .then(data => {
+    if(data.affectedRows === 1) {
+      res.send({
+        code:200,
+        msg: "修改成功"
+      })
+    }else{
+      res.send({
+        code:400,
+        msg: "修改失败"
+      })
+    }
+  })
+}
+// 删除用户
+const apiDeleteUser = (req, res) => {
+  let user_id = req.body.user_id
+  let sql =`DELETE FROM users where user_id=?`
+  dbConfig.SySqlConnect(sql,user_id)
+  .then(data => {
+    if(data.affectedRows===1){
+      res.send({
+        code: 200,
+        msg: '删除成功'
+      })
+    }else{
+      res.send({
+        code: 400,
+        msg: '删除失败'
+      })
+    }
+  })
+}
+
+
+
+
+
 module.exports = {
   passLogin,
   phoneLogin,
@@ -477,11 +950,31 @@ module.exports = {
   getScore,
   getScoreStudent,
   scoreStudentEdit,
-  addCourse,
-  moveCourse,
+  apiUsedSubject,
+  addScore,
+  moveScore,
   apiGetCourse,
   apiGetSTA,
   apiAddCourse,
   apiEditCourse,
-  apiDeleteCourse
+  apiDeleteCourse,
+  apiGetTeacher,
+  apiEditTeacher,
+  apiAddTeacher,
+  apiDeleteTeacher,
+  apiTeacherIdFind,
+  apiTeacherNameFind,
+  apiGetStudent,
+  apiEditStudent,
+  apiAddStudent,
+  apiStudentIdFind,
+  apiStudentNameFind,
+  apiStudentClassFind,
+  apiDeleteStudent,
+  apiGetUser,
+  apiGetUserIdFind,
+  apiEditUser,
+  apiAdminUser,
+  apiDeleteUser,
+  apiGetUserNameFind
 }

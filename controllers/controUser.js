@@ -115,12 +115,9 @@ const login = (req, res) => {
   let sqlArr = [student_id, password]
   let callBack = (err, data) => {
     if(err){
-      // console.log('连接出错')
       throw '连接出错'
       }else{
-        // console.log(data.length,'llala')
         if(!data.length){
-          console.log('账号密码错误')
           res.send({
             code: 400,
             msg: '账号密码错误'
@@ -130,20 +127,29 @@ const login = (req, res) => {
           let reslutStr = JSON.stringify(data); 
           let reslutObj = JSON.parse(reslutStr);
           let student_id = reslutObj[0].user_id;
-          // 签发token
-          jwk.sendToken(student_id).then(token => {
-            res.send({
-              code: 200,
-              msg: '登录成功',
-              token,
-              info : reslutObj[0]
+
+          if(reslutObj[0].admin == 'true'){
+            // 签发token
+            jwk.sendToken(student_id).then(token => {
+              res.send({
+                code: 200,
+                msg: '登录成功',
+                token,
+                info : reslutObj[0]
+              })
+            }).catch(err => {
+              res.send({
+                code: 400,
+                msg: err.message
+              })
             })
-          }).catch(err => {
+          }else{
             res.send({
               code: 400,
-              msg: err.message
+              msg: "你的账户被管理员停用，详情请联系管理员"
             })
-          })
+          }
+          
         }
        
       }
@@ -349,9 +355,9 @@ const apiGetStudentInfo = (req, res) => {
   jwk.verifyToken(token).then(decaded =>{
     let student_id = decaded.student_id
     let sql = `
-      select schoolname, student_id, name, classroomname, gradename, sex, address, phone from students 
-      LEFT JOIN schools on students.school_id = students.school_id 
+      select schoolname, students.student_id, name, classroomname, gradename, sex, address, phone from students 
       LEFT JOIN classroom on students.classroom_id = classroom.classroom_id
+      LEFT JOIN schools on schools.school_id = classroom.school_id 
       LEFT JOIN grade on students.grade_id = grade.grade_id
       where student_id=?;
     `
@@ -365,14 +371,26 @@ const apiGetStudentInfo = (req, res) => {
     })
   }).catch(error => console.log(error.message))
 }
+// 获取学期
+const apiGetSemester = (req, res) => {
+  let sql =  `select semester_id as value, semestername as text from semester`
+  dbConfig.SySqlConnect(sql)
+  .then(data => {
+    console.log(data)
+    res.send({
+      code: 200,
+      data
+    })
+  }).catch(err => console.log(err))
+}
 // 获取学生成绩
 const apiGetScore = (req, res) => {
   let {student_id, semester_id} = req.query
-  console.log(req.query)
   let sql = `
-    select classroomname '班级',students.name '姓名',students.student_id '学号', subjectname '课程',semestername '学期', score '分数' from classroom 
+    select classroomname '班级',students.name '姓名',teacher.name '任课老师', students.student_id '学号', subjectname '课程',semestername '学期', score '分数' from classroom 
     left outer join students on classroom.classroom_id=students.classroom_id 
     left outer join subject on classroom.classroom_id=students.classroom_id
+    left outer join teacher on teacher.teacher_id = subject.teacher_id
     left outer join score on subject.subject_id=score.subject_id and students.student_id=score.student_id
     left outer join semester on score.semester_id = semester.semester_id
     where score.student_id = ? and score.semester_id = ? 
@@ -396,6 +414,7 @@ const apiGetCourse = (req, res) => {
   left join courseTime on course.time_id = courseTime.time_id
   left join classaddress on classaddress.classaddress_id = course.classaddress_id
   where course.classroom_id = (SELECT classroom_id FROM students WHERE student_id = ?) AND course.weekth = ? and course.day=?
+  ORDER BY course.time_id
   `
   let sqlArr = [student_id,weekth,day]
   dbConfig.SySqlConnect(sql, sqlArr)
@@ -419,6 +438,7 @@ module.exports = {
   apiIsPhone,
   apiGetUserInfo,
   apiGetStudentInfo,
+  apiGetSemester,
   apiGetScore,
   apiGetCourse
 }
