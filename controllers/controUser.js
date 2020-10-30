@@ -111,7 +111,7 @@ const login = (req, res) => {
   // console.log(req.body)
   let student_id = req.body.student_id
   let password = req.body.password
-  let sql = `select * from users where user_id =? and password =?`
+  let sql = `select * from users where user_id =? and password =? and role = 'student'`
   let sqlArr = [student_id, password]
   let callBack = (err, data) => {
     if(err){
@@ -161,7 +161,7 @@ const phoneLogin = (req, res) => {
   let {phone,code} = req.body
   console.log(phoneCodeif(phone, code))
   if(phoneCodeif(phone,code)){
-    let sql = `select * from users where phone=?`
+    let sql = `select * from users where phone=? and role = 'student'`
     let sqlArr =[phone]
     let callBack = (err, data) => {
       if(err){
@@ -171,20 +171,28 @@ const phoneLogin = (req, res) => {
           let reslutStr = JSON.stringify(data); 
           let reslutObj = JSON.parse(reslutStr);
           let student_id = reslutObj[0].user_id
-          // 签发token
-          jwk.sendToken(student_id).then(token => {
-            res.send({
-              code: 200,
-              msg: '登录成功',
-              token,
-              info : reslutObj[0]
+          //  判断账号是否被禁用
+          if(reslutObj[0].admin == 'true'){
+            // 签发token
+            jwk.sendToken(student_id).then(token => {
+              res.send({
+                code: 200,
+                msg: '登录成功',
+                token,
+                info : reslutObj[0]
+              })
+            }).catch(err => {
+              res.send({
+                code: 400,
+                msg: err.message
+              })
             })
-          }).catch(err => {
+          }else{
             res.send({
               code: 400,
-              msg: err.message
+              msg: "你的账户被管理员停用，详情请联系管理员"
             })
-          })
+          }
         }
      }
      dbConfig.sqlConnect(sql, sqlArr, callBack)
@@ -194,7 +202,7 @@ const phoneLogin = (req, res) => {
 }
 // 用户信息修改接口
 const userInfoEdit = (req, res) => {
-  // console.log(req.body)
+  console.log(req.body)
   const {username, email, student_id,sex, brithday, text } = req.body
   let avatar = ''
   if(req.body.avatar[0].url === undefined ){
@@ -239,9 +247,9 @@ const userInfoEdit = (req, res) => {
 }
 // 判断用户名是否已被注册接口
 const isUserName = (req, res) => {
-  let username = req.query.username
-  let sql = `select * from users where username=?`
-  let sqlArr = [username]
+  let name = req.query.name
+  let sql = `select * from users where name=?`
+  let sqlArr = [name]
   dbConfig.SySqlConnect(sql, sqlArr).then(data => {
     if (!data.length) {
       res.send({
@@ -283,7 +291,7 @@ const resiger = async (req, res) => {
      //判断该学号是否被注册
     if (await isStudentID(studentID)) {
       if(phoneCodeif(phone, code)){
-        let sql =  `insert into users (name, password, user_id, phone) values (?,?,?,?)`
+        let sql =  `insert into users (name, password, user_id, phone, role, admin) values (?,?,?,?,'student','true')`
         let sqlArr = [username, password, studentID, phone]
         dbConfig.SySqlConnect(sql, sqlArr).then(result => {
           if (result.affectedRows === 1) {
@@ -320,11 +328,11 @@ const apiGetUserInfo = (req, res) => {
     console.log(decaded.student_id)
     let student_id = decaded.student_id
     console.log(student_id)
-    let sql = `select user_id, phone, role, email, avatar, brithday, sex, adress, text, name from users where user_id=?`
+    let sql = `select user_id, phone, role, email, avatar, brithday, sex, address, text, name from users where user_id=?`
     let sqlArr = [student_id]
     let callBack = (err, data) => {
       if(err){
-        console.log('连接出错')
+        console.log('连接出错', err)
         }else{
           // 要把数据转换成JSON格式发到页面
           let reslutStr = JSON.stringify(data); 

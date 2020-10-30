@@ -62,21 +62,21 @@ let phoneCodeif = (phone,code) =>{
   }
   return false
 }
-// 模拟验证码发送接口
-const sendPhoneCode = (req, res) => {
-  let phone = req.query.phone;
-  let code = rand(1000, 9999);
-  validatePhoneCode.push({
-    'phone': phone,
-    'code': code
-  })
-  console.log(validatePhoneCode);
-  res.send({
-    'code': 200,
-    'msg': '发送成功'
-  })
-  console.log(code);
-}
+// // 模拟验证码发送接口
+// const sendPhoneCode = (req, res) => {
+//   let phone = req.query.phone;
+//   let code = rand(1000, 9999);
+//   validatePhoneCode.push({
+//     'phone': phone,
+//     'code': code
+//   })
+//   console.log(validatePhoneCode);
+//   res.send({
+//     'code': 200,
+//     'msg': '发送成功'
+//   })
+//   console.log(code);
+// }
 // 查询详情信息方法（根据学号查找）
 const getInfo = async student_id => {
   let sql = `select * from studentInfo where student_id =?`
@@ -85,10 +85,10 @@ const getInfo = async student_id => {
 }
 
 // 发送手机验证码接口
-// const sendPhoneCode = (req, res) => {
-//   let phone = req.query.phone
-//   sendCode(phone, res)
-// }
+const sendPhoneCode = (req, res) => {
+  let phone = req.query.phone
+  sendCode(phone, res)
+}
 // 密码登陆接口
 const passLogin = (req, res) => {
   console.log(req.body)
@@ -107,21 +107,31 @@ const passLogin = (req, res) => {
           // 查询自己的信息
           let myinfo = await getInfo(studentID)
           // console.log(myinfo)
-          // 签发token
-          jwk.sendToken(studentID).then(token => {
-            res.send({
-              code: 200,
-              msg: '登录成功',
-              token,
-              info : reslutObj[0],
-              myInfo: myinfo[0]
+
+          // 判断账号是否被仅用
+          if(reslutObj[0].admin == 'true'){
+            // 签发token
+            jwk.sendToken(studentID).then(token => {
+              res.send({
+                code: 200,
+                msg: '登录成功',
+                token,
+                info : reslutObj[0],
+                myInfo: myinfo[0]
+              })
+            }).catch(err => {
+              res.send({
+                code: 400,
+                msg: err.message
+              })
             })
-          }).catch(err => {
+          } else {
             res.send({
               code: 400,
-              msg: err.message
+              msg: "你的账户被管理员停用，详情请联系管理员"
             })
-          })
+          }
+          
         } else {
           res.send({
             code: 400,
@@ -150,21 +160,29 @@ const phoneLogin = (req, res) => {
             // 查询自己的信息
             let myinfo = await getInfo(studentID)
             // console.log(myinfo)
-            // 签发token
-            jwk.sendToken(studentID).then(token => {
-              res.send({
-                code: 200,
-                msg: '登录成功',
-                token,
-                info : reslutObj[0],
-                myInfo: myinfo[0]
+            // 判断账号是否被仅用
+            if(reslutObj[0].admin == 'true'){
+              // 签发token
+              jwk.sendToken(studentID).then(token => {
+                res.send({
+                  code: 200,
+                  msg: '登录成功',
+                  token,
+                  info : reslutObj[0],
+                  myInfo: myinfo[0]
+                })
+              }).catch(err => {
+                res.send({
+                  code: 400,
+                  msg: err.message
+                })
               })
-            }).catch(err => {
+            } else {
               res.send({
                 code: 400,
-                msg: err.message
+                msg: "你的账户被管理员停用，详情请联系管理员"
               })
-            })
+            }
           } else {
             res.send({
               code: 400,
