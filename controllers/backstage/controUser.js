@@ -157,6 +157,7 @@ const phoneLogin = (req, res) => {
             // 要把数据转换成JSON格式发到页面
             let reslutStr = JSON.stringify(data); 
             let reslutObj = JSON.parse(reslutStr);
+            let studentID = reslutObj[0].user_id
             // 查询自己的信息
             let myinfo = await getInfo(studentID)
             // console.log(myinfo)
@@ -186,15 +187,127 @@ const phoneLogin = (req, res) => {
           } else {
             res.send({
               code: 400,
-              msg: "密码错误"
+              msg: "手机号错误"
             })
           }
         }
      }
      dbConfig.sqlConnect(sql, sqlArr, callBack)
   }else{
-    res.send('手机号和验证码不匹配')
+    res.send({
+      code:400,
+      msg:'手机号和验证码不匹配'
+    })
   }
+}
+
+// 查询是否教师工号是否可用  注册时
+const isTeacher = (req, res) => {
+  let teacher_id = req.query.teacher_id
+  // 判断此教师工号是否存在
+  let sql = `select * from teacher where teacher_id =?`
+  dbConfig.SySqlConnect(sql, teacher_id).then(result => {
+    if(result.length>0) {
+      // 判断此教师工号是否已注册
+      let sql2 = `select * from users where user_id  =? and role = 'teacher'`
+      dbConfig.SySqlConnect(sql2, teacher_id).then(result2 => {
+        if(!result2.length>0) {
+          res.send({
+            code: 200,
+            msg: '教师工号用可注册'
+          })
+        }else {
+          res.send({
+            code: 400,
+            msg: '此工号已注册'
+          })
+        }
+      })
+    }else {
+      res.send({
+        code: 400,
+        msg: '不存在此教师工号'
+      })
+    }
+  })
+}
+// 判断手机号是否注册过了
+const isPhone = (req, res) => {
+  let phone = req.query.phone
+  let sql = `select * from users where phone =?`
+  dbConfig.SySqlConnect(sql, phone).then(result => {
+    if(!result.length>0) {
+      res.send({
+        code: 200,
+        msg: '手机号可注册'
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: '手机号已注册'
+      })
+    }
+  })
+}
+// 注册接口
+const Register = (req, res) => {
+  let {teacher_id, password, phone, code } = req.body
+  console.log(req.body)
+  console.log(phoneCodeif(phone, code))
+  if(phoneCodeif(phone, code)) {
+    let sql  =  `insert into users (user_id, password, phone, role, admin) values(?,?,?,'teacher', 'true')`
+    let sqlArr = [teacher_id, password, phone]
+    dbConfig.SySqlConnect(sql, sqlArr).then(result => {
+      if(result.affectedRows === 1) {
+        res.send({
+          code: 200,
+          msg: '注册成功'
+        })
+      } else{
+        res.send({
+          code: 400,
+          msg: '注册失败，请稍后再试'
+        })
+      }
+    })
+  }  else {
+    res.send({
+      code: 400,
+      msg: '验证码错误'
+    })
+  }
+
+}
+// 密码修改
+const Password = (req, res) => {
+  let {teacher_id, oldPassword, password} =req.body
+  let sql = `select * from users where user_id = ? and password =?`
+  let sqlArr  = [teacher_id, oldPassword]
+  dbconfig.SySqlConnect(sql, sqlArr).then(reslut => {
+    if(reslut.length>0) {
+      let sql2 = `update users set password = ? where user_id =?`
+      let sql2Arr = [password, teacher_id]
+      dbconfig.SySqlConnect(sql2, sql2Arr).then(result2 => {
+        if(result2.affectedRows ===1) {
+          res.send({
+            code: 200,
+            msg: '密码修改成功'
+          })
+        }else {
+          res.send({
+            code: 400,
+            msg: '密码修改失败，请稍后再试'
+          })
+        }
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: '原密码错误'
+      })
+    }
+  })
+  console.log(req.body)
 }
 // 获取班级成员信息接口
 const getClassTeam = async (req, res) => {
@@ -643,7 +756,7 @@ const apiTeacherIdFind = (req, res) => {
     } else {
       res.send({
         code: 400,
-        msg: "查询失败"
+        msg: "没有该工号"
       })
     }
   })
@@ -665,7 +778,7 @@ const apiTeacherNameFind = (req, res) => {
     } else {
       res.send({
         code: 400,
-        msg: "查询失败"
+        msg: '没有该老师'
       })
     }
   })
@@ -776,7 +889,7 @@ const apiStudentIdFind = (req, res) => {
     } else {
       res.send({
         code: 400,
-        msg: "查询失败"
+        msg: "没有该学号"
       })
     }
   })
@@ -801,7 +914,7 @@ const apiStudentNameFind = (req, res) => {
     } else {
       res.send({
         code: 400,
-        msg: "查询失败"
+        msg: "没有该学生"
       })
     }
   })
@@ -953,6 +1066,109 @@ const apiDeleteUser = (req, res) => {
   })
 }
 
+// 获取科目信息
+const apiGetSubject = (req, res) => {
+  let sql = `
+    select subject_id, subjectname, subject.teacher_id, name from subject
+    left join teacher on teacher.teacher_id = subject.teacher_id `
+  dbConfig.SySqlConnect(sql).then(result => {
+    if(result.length>0) {
+      res.send({
+        code: 200,
+        msg: '获取科目信息成功',
+        subjects: result
+      })
+    }else {
+      res.send({
+        code: 400,
+        msg: '获取科目信息失败，请稍后再试'
+      })
+    }
+  })
+}
+// 获取科目信息 科目名称
+const apiGetSubjectName = (req, res) => {
+  let subjectname = req.query.subjectname
+  let sql = `
+    select subject_id, subjectname, subject.teacher_id, name from subject
+    left join teacher on teacher.teacher_id = subject.teacher_id where subjectname =?`
+  dbConfig.SySqlConnect(sql,subjectname).then(result => {
+    if(result.length>0) {
+      res.send({
+        code: 200,
+        msg: '获取科目信息成功',
+        subjects: result
+      })
+    }else {
+      res.send({
+        code: 400,
+        msg: '没有此科目'
+      })
+    }
+  })
+}
+// 获取科目信息 任课老师查找
+const apiGetSubjectTeacher = (req, res) => {
+  let name = req.query.name
+  let sql = `
+    select subject_id, subjectname, subject.teacher_id, name from subject
+    left join teacher on teacher.teacher_id = subject.teacher_id where name=?`
+  dbConfig.SySqlConnect(sql,name).then(result => {
+    console.log(result)
+    if(result.length>0) {
+      res.send({
+        code: 200,
+        msg: '获取科目信息成功',
+        subjects: result
+      })
+    }else {
+      res.send({
+        code: 400,
+        msg: '没有该老师任课的科目'
+      })
+    }
+  })
+}
+
+// 添加科目
+const apiAddSubject = (req, res) => {
+  let {teacher_id, subjectname} = req.body
+  let sql = `insert into subject(subjectname, teacher_id) values(?,?)`
+  let sqlArr = [subjectname,teacher_id]
+  dbConfig.SySqlConnect(sql, sqlArr).then(result => {
+    if(result.affectedRows === 1) {
+      res.send({
+        code: 200,
+        msg: '添加科目成功'
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: '添加科目失败，请稍后再试'
+      })
+    }
+  })
+}
+
+// 修改科目
+const apiEditSubject = (req, res) => {
+  let {teacher_id, subjectname , subject_id} = req.body
+  let sql = `update  subject set subjectname =?, teacher_id =? where subject_id =?`
+  let sqlArr = [subjectname,teacher_id,subject_id]
+  dbConfig.SySqlConnect(sql, sqlArr).then(result => {
+    if(result.affectedRows === 1) {
+      res.send({
+        code: 200,
+        msg: '修改科目成功'
+      })
+    } else {
+      res.send({
+        code: 400,
+        msg: '修改科目失败，请稍后再试'
+      })
+    }
+  })
+}
 
 
 
@@ -961,6 +1177,10 @@ module.exports = {
   passLogin,
   phoneLogin,
   sendPhoneCode,
+  isTeacher,
+  isPhone,
+  Register,
+  Password,
   getClassTeam,
   getStudentInfo,
   StudentInfoEdit,
@@ -994,5 +1214,10 @@ module.exports = {
   apiEditUser,
   apiAdminUser,
   apiDeleteUser,
-  apiGetUserNameFind
+  apiGetUserNameFind, 
+  apiGetSubject,
+  apiAddSubject,
+  apiEditSubject,
+  apiGetSubjectName,
+  apiGetSubjectTeacher
 }

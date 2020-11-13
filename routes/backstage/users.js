@@ -8,6 +8,14 @@ router.post('/passLogin',controUser.passLogin)
 router.post('/phoneLogin',controUser.phoneLogin)
 // 发送手机验证码接口
 router.get('/sendPhoneCode', controUser.sendPhoneCode)
+// 判断 该学工号能否注册 
+router.get('/is_teacher', controUser.isTeacher)
+// 判断 该手机号能否注册 
+router.get('/is_phone', controUser.isPhone)
+// 注册接口
+router.post('/register',controUser.Register)
+// 密码修改
+router.post('/password',controUser.Password)
 // 获取班级成员接口
 router.get('/getClassTeam', controUser.getClassTeam)
 // 获取学生详情信息接口
@@ -78,5 +86,16 @@ router.post('/useredit', controUser.apiEditUser)
 router.post('/user_admin', controUser.apiAdminUser)
 // 删除用户
 router.post('/user_delete', controUser.apiDeleteUser)
+
+// 获取科目信息
+router.get('/subject', controUser.apiGetSubject)
+// 获取科目信息 科目名称
+router.get('/subject_name', controUser.apiGetSubjectName)
+// 获取科目信息 任课老师查找
+router.get('/subject_teacher_name', controUser.apiGetSubjectTeacher)
+// 添加科目
+router.post('/subject_add', controUser.apiAddSubject)
+// 修改科目
+router.post('/subject_edit', controUser.apiEditSubject)
 
 module.exports = router;

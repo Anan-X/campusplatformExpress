@@ -37,10 +37,18 @@ app.set('view engine', 'ejs');
 
 
 // 配置post请求
-app.use(bodyParser.json());
+
+app.use(express.json({limit: '10mb'}));
+
+
 app.use(bodyParser.urlencoded({
+  limit: '10mb',
   extended: true
 }));
+
+
+
+
 
 app.use(logger('dev'));
 app.use(express.json());
